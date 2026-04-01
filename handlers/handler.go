@@ -28,10 +28,40 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// buat folder uploads
+	// ============================================
+	// CHECKLIST 1: Validasi penamaan file
+	// ============================================
+	if err := validateFileName(handler.Filename); err != nil {
+		http.Error(w, fmt.Sprintf("Nama file tidak valid: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// ============================================
+	// CHECKLIST 2: Validasi tipe file
+	// ============================================
+	// Baca 512 byte pertama untuk deteksi MIME type
+	fileHeader := make([]byte, 512)
+	n, err := file.Read(fileHeader)
+	if err != nil {
+		http.Error(w, "Gagal membaca file", http.StatusBadRequest)
+		return
+	}
+	fileHeader = fileHeader[:n]
+
+	// Reset posisi file ke awal setelah membaca header
+	file.Seek(0, 0)
+
+	if err := validateFileType(handler.Filename, fileHeader, r); err != nil {
+		http.Error(w, fmt.Sprintf("Tipe file tidak valid: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Buat folder uploads
 	os.MkdirAll("uploads", os.ModePerm)
 
-	filePath := filepath.Join("uploads", handler.Filename)
+	// Gunakan nama file yang sudah divalidasi
+	safeFileName := filepath.Base(handler.Filename)
+	filePath := filepath.Join("uploads", safeFileName)
 
 	dst, err := os.Create(filePath)
 	if err != nil {
@@ -42,5 +72,5 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	io.Copy(dst, file)
 
-	w.Write([]byte("Upload berhasil"))
+	w.Write([]byte(fmt.Sprintf("Upload berhasil! File disimpan: %s", safeFileName)))
 }
